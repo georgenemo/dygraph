@@ -23,10 +23,10 @@ ResNet:
 
 FPN:
   # index 0 stands for res2
-  in_channels: [512, 1024, 2048] #
+  in_channels: [256, 512, 1024, 2048]
   out_channel: 256
   min_level: 1
-  max_level: 6
+  max_level: 5
   spatial_scale: [0.125, 0.0625, 0.03125]
   has_extra_convs: true
   use_c5: false
@@ -54,29 +54,19 @@ FPN:
 #   rpn_channel: 256
 
 FCOSHead:
-  num_classes: 80
-  fpn_stride: [8, 16, 32, 64, 128]
   fcos_feat:
     name: FCOSFeat
-    num_convs: 4
-    norm_type: "gn" #
     feat_in: 256
     feat_out: 256 
-  loss: FCOSLoss
+    num_convs: 4
+    norm_type: "gn" #
+  num_classes: 80
+  fpn_stride: [8, 16, 32, 64, 128]
+  prior_prob: 0.01
+  fcos_loss: FCOSLoss
   norm_reg_targets: True
   centerness_on_reg: True
-  use_dcn_in_tower: True
-
-# FCOSHead:
-#   num_classes: 80
-#   fpn_stride: [8, 16, 32, 64, 128]
-#   num_convs: 4
-#   norm_type: "bn" #
-#   fcos_loss: FCOSLoss
-#   norm_reg_targets: True
-#   centerness_on_reg: True
-#   use_dcn_in_tower: False
-#   nms: MultiClassNMS
+  use_dcn_in_tower: False
 
 # RetinaHead:
 #   num_convs_per_octave: 4
@@ -111,7 +101,7 @@ FCOSLoss:
 BBoxPostProcess:
   decode:
     name: FCOSBox #
-    num_classes: 80 #
+    num_classes: 80
     batch_size: 1
   nms:
     name: MultiClassNMS

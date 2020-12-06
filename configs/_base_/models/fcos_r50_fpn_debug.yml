@@ -10,7 +10,7 @@ FCOS:
   neck: FPN
   fcos_head: FCOSHead
   # post process
-  bbox_post_process: BBoxPostProcess
+  fcos_post_process: FCOSPostProcess
 
 ResNet:
   # index 0 stands for res2
@@ -31,28 +31,6 @@ FPN:
   has_extra_convs: true
   use_c5: false
 
-# Anchor:
-#   anchor_generator:
-#     name: AnchorGeneratorRPN
-#     aspect_ratios: [0.5, 1.0, 2.0]
-#     anchor_start_size: 32
-#     stride: [4., 4.]
-#   anchor_target_generator:
-#     name: AnchorTargetGeneratorRPN
-#     batch_size_per_im: 256
-#     fg_fraction: 0.5
-#     negative_overlap: 0.3
-#     positive_overlap: 0.7
-#     straddle_thresh: 0.0
-
-# RPNHead:
-#   rpn_feat:
-#     name: RPNFeat
-#     feat_in: 256
-#     feat_out: 256
-#   anchor_per_position: 3
-#   rpn_channel: 256
-
 FCOSHead:
   fcos_feat:
     name: FCOSFeat
@@ -68,39 +46,15 @@ FCOSHead:
   centerness_on_reg: True
   use_dcn_in_tower: False
 
-# RetinaHead:
-#   num_convs_per_octave: 4
-#   num_chan: 256
-#   max_level: 7
-#   min_level: 3
-#   prior_prob: 0.01
-#   base_scale: 4
-#   num_scales_per_octave: 3
-#   anchor_generator:
-#     aspect_ratios: [1.0, 2.0, 0.5]
-#     variance: [1.0, 1.0, 1.0, 1.0]
-#   target_assign:
-#     positive_overlap: 0.5
-#     negative_overlap: 0.4
-#   gamma: 2.0
-#   alpha: 0.25
-#   sigma: 3.0151134457776365
-#   output_decoder:
-#     score_thresh: 0.05
-#     nms_thresh: 0.5
-#     pre_nms_top_n: 1000
-#     detections_per_im: 100
-#     nms_eta: 1.0
-
 FCOSLoss:
   loss_alpha: 0.25
   loss_gamma: 2.0
   iou_loss_type: "giou"
   reg_weights: 1.0
 
-BBoxPostProcess:
+FCOSPostProcess:
   decode:
-    name: FCOSBox #
+    name: FCOSBox
     num_classes: 80
     batch_size: 1
   nms:

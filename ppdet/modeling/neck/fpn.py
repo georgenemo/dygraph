@@ -32,7 +32,7 @@ class FPN(Layer):
 
         self.lateral_convs = []
         self.fpn_convs = []
-        fan = out_channel * 3 * 3        
+        fan = out_channel * 3 * 3
 
         self.num_backbone_stages = len(spatial_scale)
         self.num_outs = self.max_level - self.min_level + 1
@@ -72,7 +72,7 @@ class FPN(Layer):
 
         # add extra conv levels for RetinaNet(use_c5)/FCOS(use_p5)
         if self.has_extra_convs and self.num_outs > self.num_backbone_stages:
-            for lvl in range(self.highest_backbone_level + 1, self.max_level + 1): # P6 P7 ...
+            for lvl in range(self.highest_backbone_level + 1, self.max_level + 1):  # P6 P7 ...
                 if lvl == self.highest_backbone_level + 1 and self.use_c5:
                     in_c = in_channels[self.highest_backbone_level]
                 else:
@@ -92,11 +92,10 @@ class FPN(Layer):
                             learning_rate=2., regularizer=L2Decay(0.))))
                 self.fpn_convs.append(extra_fpn_conv)
 
-
     def forward(self, body_feats):
         laterals = []
         for lvl in range(self.min_level, self.highest_backbone_level + 1):
-            i = lvl-self.min_level
+            i = lvl - self.min_level
             laterals.append(self.lateral_convs[i](body_feats[lvl]))
 
         used_backbone_levels = len(self.spatial_scale)

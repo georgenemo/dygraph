@@ -310,6 +310,105 @@ class RCNNBox(object):
 
 @register
 @serializable
+class FCOSBox(object):
+    __shared__ = ['num_classes', 'batch_size']
+
+    def __init__(self,
+                 num_classes=80,
+                 batch_size=1):
+        super(FCOSBox, self).__init__()
+        self.num_classes = num_classes
+        self.batch_size = batch_size
+
+    def __merge_hw(self, inputs, ch_type="channel_first"):
+        """
+        Args:
+            inputs (Variables): Feature map whose H and W will be merged into one dimension
+            ch_type     (str): channel_first / channel_last
+        Return:
+            new_shape (Variables): The new shape after h and w merged into one dimension
+        """
+        shape_ = paddle.shape(inputs)
+        bs, ch, hi, wi = shape_[0], shape_[1], shape_[2], shape_[3]
+        img_size = hi * wi
+        img_size.stop_gradient = True
+        if ch_type == "channel_first":
+            new_shape = paddle.concat([bs, ch, img_size])
+        elif ch_type == "channel_last":
+            new_shape = paddle.concat([bs, img_size, ch])
+        else:
+            raise KeyError("Wrong ch_type %s" % ch_type)
+        new_shape.stop_gradient = True
+        return new_shape
+
+    def _postprocessing_by_level(self, locations, box_cls, box_reg, box_ctn, im_info):
+        """
+        Args:
+            locations (Variables): anchor points for current layer
+            box_cls   (Variables): categories prediction
+            box_reg   (Variables): bounding box prediction
+            box_ctn   (Variables): centerness prediction
+            im_info   (Variables): [h, w, scale] for input images
+        Return:
+            box_cls_ch_last  (Variables): score for each category, in [N, C, M]
+                C is the number of classes and M is the number of anchor points
+            box_reg_decoding (Variables): decoded bounding box, in [N, M, 4]
+                last dimension is [x1, y1, x2, y2]
+        """
+        act_shape_cls = self.__merge_hw(box_cls)
+        box_cls_ch_last = paddle.reshape(
+            x=box_cls,
+            shape=[self.num_classes, self.batch_size, -1],
+            actual_shape=act_shape_cls)
+        box_cls_ch_last = F.sigmoid(box_cls_ch_last)
+
+        act_shape_reg = self.__merge_hw(box_reg, "channel_last")
+        box_reg_ch_last = paddle.transpose(box_reg, perm=[0, 2, 3, 1])
+        box_reg_ch_last = paddle.reshape(
+            x=box_reg_ch_last,
+            shape=[self.batch_size, -1, 4],
+            actual_shape=act_shape_reg)
+        box_reg_decoding = paddle.stack(
+            [
+                locations[:, 0] - box_reg_ch_last[:, :, 0],
+                locations[:, 1] - box_reg_ch_last[:, :, 1],
+                locations[:, 0] + box_reg_ch_last[:, :, 2],
+                locations[:, 1] + box_reg_ch_last[:, :, 3]
+            ],
+            axis=1)
+        box_reg_decoding = paddle.transpose(box_reg_decoding, perm=[0, 2, 1])
+
+        act_shape_ctn = self.__merge_hw(box_ctn)
+        box_ctn_ch_last = paddle.reshape(
+            x=box_ctn,
+            shape=[self.batch_size, 1, -1],
+            actual_shape=act_shape_ctn)
+        box_ctn_ch_last = F.sigmoid(box_ctn_ch_last)
+
+        # recover the location to original image
+        im_scale = im_info[:, 2]
+        box_reg_decoding = box_reg_decoding / im_scale
+        box_cls_ch_last = box_cls_ch_last * box_ctn_ch_last
+        return box_cls_ch_last, box_reg_decoding
+
+    def __call__(self, locations, fcos_head_out, im_info):
+        cls_logits, bboxes_reg, centerness = fcos_head_out
+        pred_boxes_ = []
+        pred_scores_ = []
+        for _, (
+                pts, cls, box, ctn
+        ) in enumerate(zip(locations, cls_logits, bboxes_reg, centerness)):
+            pred_scores_lvl, pred_boxes_lvl = self._postprocessing_by_level(
+                pts, cls, box, ctn, im_info)
+            pred_boxes_.append(pred_boxes_lvl)
+            pred_scores_.append(pred_scores_lvl)
+        pred_boxes = paddle.concat(pred_boxes_, axis=1)
+        pred_scores = paddle.concat(pred_scores_, axis=2)
+        return pred_boxes, pred_scores
+
+
+@register
+@serializable
 class DecodeClipNms(object):
     __shared__ = ['num_classes']
 

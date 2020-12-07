@@ -39,7 +39,7 @@ class FCOS(BaseArch):
         self.neck = neck
         self.fcos_head = fcos_head
         self.fcos_post_process = fcos_post_process
-
+    '''
     def _inputs_def(self, image_shape, fields):
         im_shape = [None] + image_shape
         # yapf: disable
@@ -119,7 +119,7 @@ class FCOS(BaseArch):
         #     iterable=iterable) if use_dataloader else None
         # return feed_vars, loader
         return feed_vars  # self.inputs
-
+    '''
     def model_arch(self, ):
         # Backbone
         body_feats = self.backbone(self.inputs)
@@ -134,7 +134,7 @@ class FCOS(BaseArch):
             locations = self.fcos_head._compute_locations(fpn_feats)
             locations, cls_logits, bboxes_reg, centerness = self.fcos_head.get_prediction(locations,
                                                                                           self.fcos_head_outs)
-            self.bboxes = self.fcos_post_process(locations, cls_logits, bboxes_reg, centerness, self.inputs['im_info'])
+            self.bboxes = self.fcos_post_process(locations, cls_logits, bboxes_reg, centerness, self.inputs['scale_factor'])
 
     def get_loss(self, ):
         loss = {}

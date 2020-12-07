@@ -41,7 +41,7 @@ class ConvNormLayer(nn.Layer):
                  lr=1.0,
                  name=None):
         super(ConvNormLayer, self).__init__()
-        assert norm_type in ['bn', 'sync_bn']
+        assert norm_type in ['bn', 'sync_bn', 'affine_channel']
         self.norm_type = norm_type
         self.act = act
 

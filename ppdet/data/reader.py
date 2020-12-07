@@ -39,6 +39,11 @@ class Compose(object):
                         'target{}'.format(i)
                         for i in range(len(v['anchor_masks']))
                     ])
+                elif op_cls in [transform.Gt2FCOSTarget, transform.Gt2FCOSTargetOp]:
+                    output_fields = ['image']
+                    for lvl in range(len(v['downsample_ratios'])):
+                        output_fields += ['reg_target{}'.format(lvl), 'labels{}'.format(lvl), 'centerness{}'.format(lvl)]
+
 
         self.fields = fields
         self.output_fields = output_fields if output_fields else fields

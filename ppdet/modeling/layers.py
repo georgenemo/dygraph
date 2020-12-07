@@ -341,7 +341,7 @@ class FCOSBox(object):
         new_shape.stop_gradient = True
         return new_shape
 
-    def _postprocessing_by_level(self, locations, box_cls, box_reg, box_ctn, im_info):
+    def _postprocessing_by_level(self, locations, box_cls, box_reg, box_ctn, scale_factor):
         """
         Args:
             locations (Variables): anchor points for current layer
@@ -386,12 +386,12 @@ class FCOSBox(object):
         box_ctn_ch_last = F.sigmoid(box_ctn_ch_last)
 
         # recover the location to original image
-        im_scale = im_info[:, 2]
+        im_scale = scale_factor #im_info[:, 2]
         box_reg_decoding = box_reg_decoding / im_scale
         box_cls_ch_last = box_cls_ch_last * box_ctn_ch_last
         return box_cls_ch_last, box_reg_decoding
 
-    def __call__(self, locations, fcos_head_out, im_info):
+    def __call__(self, locations, fcos_head_out, scale_factor):
         cls_logits, bboxes_reg, centerness = fcos_head_out
         pred_boxes_ = []
         pred_scores_ = []
@@ -399,7 +399,7 @@ class FCOSBox(object):
                 pts, cls, box, ctn
         ) in enumerate(zip(locations, cls_logits, bboxes_reg, centerness)):
             pred_scores_lvl, pred_boxes_lvl = self._postprocessing_by_level(
-                pts, cls, box, ctn, im_info)
+                pts, cls, box, ctn, scale_factor)
             pred_boxes_.append(pred_boxes_lvl)
             pred_scores_.append(pred_scores_lvl)
         pred_boxes = paddle.concat(pred_boxes_, axis=1)

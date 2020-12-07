@@ -1,5 +1,5 @@
 job_name=fcos_r50_fpn_1x_coco_debug
-config=configs/${job_name}.py
+config=configs/${job_name}.yml
 log_dir=log_dir/${job_name}
 now=$(date +"%Y%m%d_%H%M%S")
 mkdir -p ${work_dir}

@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=4 python3.7 dygraph_print.py -c configs/fcos_r50_fpn_1x_coco_debug.yml 2>&1 | tee fcos_dy_print.txt

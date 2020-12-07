@@ -169,7 +169,7 @@ class FCOSHead(nn.Layer):
                     initializer=Constant(value=0))))
         self.fcos_head_centerness.append(fcos_head_centerness)
 
-    def forward(self, fpn_feats, spatial_scale):
+    def forward(self, fpn_feats, spatial_scale, mode):
         cls_logits_list = []
         bboxes_reg_list = []
         centerness_list = []
@@ -195,7 +195,7 @@ class FCOSHead(nn.Layer):
             bbox_reg = bbox_reg * scale
             if self.norm_reg_targets:
                 bbox_reg = fluid.layers.relu(bbox_reg)
-                if self.inputs['mode'] == 'infer':
+                if mode == 'infer':
                     bbox_reg = bbox_reg * fpn_stride
             else:
                 bbox_reg = paddle.exp(bbox_reg)

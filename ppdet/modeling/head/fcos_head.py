@@ -12,7 +12,7 @@ import paddle.nn as nn
 from paddle import ParamAttr
 from paddle.nn import Layer, Sequential
 from paddle.nn import Conv2D, Conv2DTranspose, ReLU
-from paddle.nn.initializer import Normal, Constant, NumpyArrayInitializer, XavierUniform
+from paddle.nn.initializer import Normal, Constant, XavierUniform
 from paddle.regularizer import L2Decay
 from ppdet.core.workspace import register
 from ppdet.modeling import ops
@@ -90,7 +90,7 @@ class FCOSHead(nn.Layer):
         centerness_on_reg(bool): The prediction of centerness on regression or clssification branch
         use_dcn_in_tower (bool): Ues deformable conv on FCOSHead if true
     """
-    __inject__ = ['fcos_feat', 'fcos_loss', 'nms']
+    __inject__ = ['fcos_feat', 'fcos_loss']
     __shared__ = ['num_classes']
 
     def __init__(self,
@@ -102,9 +102,8 @@ class FCOSHead(nn.Layer):
                  norm_reg_targets=True,
                  centerness_on_reg=True,  # FCOSv2
                  use_dcn_in_tower=False):
+        super(FCOSHead, self).__init__()
         self.fcos_feat = fcos_feat
-        if isinstance(fcos_feat, dict):
-            self.fcos_feat = FCOSFeat(**fcos_feat)
         self.num_classes = num_classes
         self.fpn_stride = fpn_stride
         self.prior_prob = prior_prob
@@ -112,7 +111,6 @@ class FCOSHead(nn.Layer):
         self.norm_reg_targets = norm_reg_targets
         self.centerness_on_reg = centerness_on_reg
         self.use_dcn_in_tower = use_dcn_in_tower
-        # self.nms = MultiClassNMS(**nms)
         self.batch_size = 8  #
 
         self.fcos_head_cls = []
@@ -176,7 +174,7 @@ class FCOSHead(nn.Layer):
         bboxes_reg_list = []
         centerness_list = []
         assert len(fpn_feats) == len(self.fpn_stride), "The size of fpn_feats is not equal to size of fpn_stride"
-        fcos_cls_feats, fcos_reg_feats = FCOSFeat(**fpn_feats)
+        fcos_cls_feats, fcos_reg_feats = self.fcos_feat(fpn_feats)
 
         for sp_scale, fpn_stride, fcos_cls_feat, fcos_reg_feat in zip(spatial_scale, self.fpn_stride, fcos_cls_feats,
                                                                       fcos_reg_feats):
@@ -229,12 +227,12 @@ class FCOSHead(nn.Layer):
                 0, w * fpn_stride, fpn_stride, dtype='float32')
             shift_y = fluid.layers.range(
                 0, h * fpn_stride, fpn_stride, dtype='float32')
-            shift_x = paddle.unsqueeze(shift_x, axes=[0])
-            shift_y = paddle.unsqueeze(shift_y, axes=[1])
+            shift_x = paddle.unsqueeze(shift_x, axis=0)
+            shift_y = paddle.unsqueeze(shift_y, axis=1)
             shift_x = paddle.expand_as(
-                shift_x, target_tensor=feature[0, 0, :, :])
+                shift_x, feature[0, 0, :, :])
             shift_y = paddle.expand_as(
-                shift_y, target_tensor=feature[0, 0, :, :])
+                shift_y, feature[0, 0, :, :])
             shift_x.stop_gradient = True
             shift_y.stop_gradient = True
             shift_x = paddle.reshape(shift_x, shape=[-1])

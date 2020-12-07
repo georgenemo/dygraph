@@ -343,6 +343,7 @@ class FCOSBox(object):
 
     def _postprocessing_by_level(self, locations, box_cls, box_reg, box_ctn, scale_factor):
         """
+        [3072, 2], [1, 80, 48, 64], [1, 4, 48, 64], [1, 1, 48, 64], [1, 2]
         Args:
             locations (Variables): anchor points for current layer
             box_cls   (Variables): categories prediction
@@ -355,19 +356,21 @@ class FCOSBox(object):
             box_reg_decoding (Variables): decoded bounding box, in [N, M, 4]
                 last dimension is [x1, y1, x2, y2]
         """
-        act_shape_cls = self.__merge_hw(box_cls)
-        box_cls_ch_last = paddle.reshape(
-            x=box_cls,
-            shape=[self.num_classes, self.batch_size, -1],
-            actual_shape=act_shape_cls)
+        act_shape_cls = self.__merge_hw(box_cls) 
+        # [1, 80, 3072]
+        box_cls_ch_last = paddle.reshape(x=box_cls, shape=act_shape_cls)
+        #    x=box_cls,
+        #    shape=[self.num_classes, self.batch_size, -1],
+        #    actual_shape=act_shape_cls)
         box_cls_ch_last = F.sigmoid(box_cls_ch_last)
 
         act_shape_reg = self.__merge_hw(box_reg, "channel_last")
+        # [1, 3072, 4]
         box_reg_ch_last = paddle.transpose(box_reg, perm=[0, 2, 3, 1])
-        box_reg_ch_last = paddle.reshape(
-            x=box_reg_ch_last,
-            shape=[self.batch_size, -1, 4],
-            actual_shape=act_shape_reg)
+        box_reg_ch_last = paddle.reshape(x=box_reg, shape=act_shape_reg)
+        #    x=box_reg_ch_last,
+        #    shape=[self.batch_size, -1, 4],
+        #    actual_shape=act_shape_reg)
         box_reg_decoding = paddle.stack(
             [
                 locations[:, 0] - box_reg_ch_last[:, :, 0],
@@ -379,20 +382,20 @@ class FCOSBox(object):
         box_reg_decoding = paddle.transpose(box_reg_decoding, perm=[0, 2, 1])
 
         act_shape_ctn = self.__merge_hw(box_ctn)
-        box_ctn_ch_last = paddle.reshape(
-            x=box_ctn,
-            shape=[self.batch_size, 1, -1],
-            actual_shape=act_shape_ctn)
-        box_ctn_ch_last = F.sigmoid(box_ctn_ch_last)
+        # [1, 1, 3072]
+        box_ctn_ch_last = paddle.reshape(x=box_ctn, shape=act_shape_ctn)
+        #    x=box_ctn,
+        #    shape=[self.batch_size, 1, -1],
+        #    actual_shape=act_shape_ctn)
+        box_ctn_ch_last = F.sigmoid(box_ctn_ch_last) 
 
         # recover the location to original image
-        im_scale = scale_factor #im_info[:, 2]
+        im_scale = paddle.concat([scale_factor, scale_factor], axis=1) #im_info[:, 2]
         box_reg_decoding = box_reg_decoding / im_scale
         box_cls_ch_last = box_cls_ch_last * box_ctn_ch_last
         return box_cls_ch_last, box_reg_decoding
 
-    def __call__(self, locations, fcos_head_out, scale_factor):
-        cls_logits, bboxes_reg, centerness = fcos_head_out
+    def __call__(self, locations, cls_logits, bboxes_reg, centerness, scale_factor):
         pred_boxes_ = []
         pred_scores_ = []
         for _, (

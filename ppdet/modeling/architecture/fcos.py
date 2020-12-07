@@ -128,12 +128,12 @@ class FCOS(BaseArch):
         fpn_feats, spatial_scale = self.neck(body_feats)
 
         # FCOS_head
-        self.fcos_head_outs = self.fcos_head(fpn_feats, spatial_scale)
+        mode = self.inputs['mode']
+        self.fcos_head_outs = self.fcos_head(fpn_feats, spatial_scale, mode)
 
-        if self.inputs['mode'] == 'infer':
+        if mode == 'infer':
             locations = self.fcos_head._compute_locations(fpn_feats)
-            locations, cls_logits, bboxes_reg, centerness = self.fcos_head.get_prediction(locations,
-                                                                                          self.fcos_head_outs)
+            locations, cls_logits, bboxes_reg, centerness = self.fcos_head.get_prediction(locations, self.fcos_head_outs)
             self.bboxes = self.fcos_post_process(locations, cls_logits, bboxes_reg, centerness, self.inputs['scale_factor'])
 
     def get_loss(self, ):

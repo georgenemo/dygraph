@@ -94,9 +94,9 @@ class FPN(Layer):
 
     def forward(self, body_feats):
         laterals = []
-        for lvl in range(self.min_level, self.highest_backbone_level + 1):
-            i = lvl - self.min_level
-            laterals.append(self.lateral_convs[i](body_feats[lvl]))
+        used_backbone_levels = len(self.spatial_scale)
+        for i in range(used_backbone_levels):
+            laterals.append(self.lateral_convs[i](body_feats[i]))
 
         used_backbone_levels = len(self.spatial_scale)
         for i in range(used_backbone_levels - 1, 0, -1):

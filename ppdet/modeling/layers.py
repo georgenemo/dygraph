@@ -380,6 +380,7 @@ class FCOSBox(object):
             ],
             axis=1)
         box_reg_decoding = paddle.transpose(box_reg_decoding, perm=[0, 2, 1])
+        # [1, 3072, 4]
 
         act_shape_ctn = self.__merge_hw(box_ctn)
         # [1, 1, 3072]
@@ -393,7 +394,7 @@ class FCOSBox(object):
         im_scale = paddle.concat([scale_factor, scale_factor], axis=1) #im_info[:, 2]
         box_reg_decoding = box_reg_decoding / im_scale
         box_cls_ch_last = box_cls_ch_last * box_ctn_ch_last
-        return box_cls_ch_last, box_reg_decoding
+        return box_cls_ch_last, box_reg_decoding # shape=[1, 80, 5120], shape=[1, 5120, 4]
 
     def __call__(self, locations, cls_logits, bboxes_reg, centerness, scale_factor):
         pred_boxes_ = []
@@ -407,7 +408,7 @@ class FCOSBox(object):
             pred_scores_.append(pred_scores_lvl)
         pred_boxes = paddle.concat(pred_boxes_, axis=1)
         pred_scores = paddle.concat(pred_scores_, axis=2)
-        return pred_boxes, pred_scores
+        return pred_boxes, pred_scores # shape=[1, 6820, 4], shape=[1, 80, 6820]
 
 
 @register

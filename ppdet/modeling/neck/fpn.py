@@ -111,11 +111,12 @@ class FPN(Layer):
             i = lvl - self.min_level
             fpn_output.append(self.fpn_convs[i](laterals[i]))
 
+        spatial_scale = self.spatial_scale
         if self.num_outs > len(fpn_output):
             # use max pool to get more levels on top of outputs (Faster R-CNN, Mask R-CNN)
             if not self.has_extra_convs:
                 fpn_output.append(F.max_pool2d(fpn_output[-1], 1, stride=2))
-                self.spatial_scale = self.spatial_scale + [self.spatial_scale[-1] * 0.5]
+                spatial_scale = spatial_scale + [spatial_scale[-1] * 0.5]
             # add extra conv levels for RetinaNet(use_c5)/FCOS(use_p5)
             else:
                 if self.use_c5:
@@ -123,11 +124,11 @@ class FPN(Layer):
                 else:
                     extra_source = fpn_output[-1]
                 fpn_output.append(self.fpn_convs[used_backbone_levels](extra_source))
-                self.spatial_scale = self.spatial_scale + [self.spatial_scale[-1] * 0.5]
+                spatial_scale = spatial_scale + [spatial_scale[-1] * 0.5]
                 for i in range(used_backbone_levels + 1, self.num_outs):
                     if self.relu_before_extra_convs:
                         fpn_output.append(self.fpn_convs[i](F.relu(fpn_output[-1])))
                     else:
                         fpn_output.append(self.fpn_convs[i](fpn_output[-1]))
-                    self.spatial_scale = self.spatial_scale + [self.spatial_scale[-1] * 0.5]
-        return fpn_output, self.spatial_scale
+                    spatial_scale = spatial_scale + [spatial_scale[-1] * 0.5]
+        return fpn_output, spatial_scale

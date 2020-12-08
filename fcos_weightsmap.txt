@@ -209,7 +209,7 @@ fcos_head_cls_weights                              fcos_head.fcos_head_cls.weigh
 fcos_head_cls_bias                                 fcos_head.fcos_head_cls.bias                      
 fcos_head_reg_weights                              fcos_head.fcos_head_reg.weight                    
 fcos_head_reg_bias                                 fcos_head.fcos_head_reg.bias                      
-fcos_head_centerness_weights                       fcos_head.fcos_head_centerness.weights
+fcos_head_centerness_weights                       fcos_head.fcos_head_centerness.weight
 fcos_head_centerness_bias                          fcos_head.fcos_head_centerness.bias
 fpn_res3_sum_scale_on_reg                          fcos_head.p3_feat.scale_reg                          
 fpn_res4_sum_scale_on_reg                          fcos_head.p4_feat.scale_reg 

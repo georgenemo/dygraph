@@ -5,7 +5,7 @@ from paddle import ParamAttr
 from paddle.nn import Layer
 from paddle.nn import Conv2D
 from paddle.nn.initializer import XavierUniform
-from paddle.fluid.regularizer import L2Decay
+from paddle.regularizer import L2Decay
 from ppdet.core.workspace import register, serializable
 
 

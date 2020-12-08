@@ -11,16 +11,33 @@ import paddle.nn.functional as F
 import paddle.nn as nn
 from paddle import ParamAttr
 from paddle.nn import Layer, Sequential
-from paddle.nn import Conv2D, Conv2DTranspose, ReLU
+from paddle.nn import Conv2D, Conv2DTranspose, ReLU, BatchNorm2D, GroupNorm, SyncBatchNorm
 from paddle.nn.initializer import Normal, Constant, XavierUniform
 from paddle.regularizer import L2Decay
 from ppdet.core.workspace import register
 from ppdet.modeling import ops
 
 
+def batch_norm(ch, norm_type='bn', name=None):
+    bn_name = name + '.norm'
+    if norm_type == 'sync_bn':
+        batch_norm = nn.SyncBatchNorm
+    elif norm_type == 'gn':
+        batch_norm = nn.GroupNorm
+    else:
+        batch_norm = nn.BatchNorm2D
+
+    return batch_norm(
+        ch,
+        weight_attr=ParamAttr(
+            name=bn_name + '.weight', regularizer=L2Decay(0.)),
+        bias_attr=ParamAttr(
+            name=bn_name + '.bias', regularizer=L2Decay(0.)))
+
+
 @register
 class FCOSFeat(nn.Layer):
-    def __init__(self, feat_in=256, feat_out=256, num_convs=4, norm_type='gn'):
+    def __init__(self, feat_in=256, feat_out=256, num_convs=4, norm_type='bn'):
         super(FCOSFeat, self).__init__()
         self.feat_in = feat_in
         self.feat_out = feat_out
@@ -28,7 +45,9 @@ class FCOSFeat(nn.Layer):
         self.norm_type = norm_type
 
         self.cls_subnet_convs = []
+        self.cls_subnet_norms = []
         self.reg_subnet_convs = []
+        self.reg_subnet_norms = []
         for i in range(self.num_convs):
             in_c = self.feat_in if i == 0 else self.feat_out
 
@@ -46,6 +65,8 @@ class FCOSFeat(nn.Layer):
                     bias_attr=ParamAttr(
                         learning_rate=2., regularizer=L2Decay(0.))))
             self.cls_subnet_convs.append(cls_conv)
+            cls_norm_name = 'fcos_head_cls_tower_norm_{}'.format(i)
+            self.cls_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=cls_norm_name))
 
             reg_conv_name = 'fcos_head_reg_tower_conv_{}'.format(i)
             reg_conv = self.add_sublayer(
@@ -61,6 +82,8 @@ class FCOSFeat(nn.Layer):
                     bias_attr=ParamAttr(
                         learning_rate=2., regularizer=L2Decay(0.))))
             self.reg_subnet_convs.append(reg_conv)
+            reg_norm_name = 'fcos_head_reg_tower_norm_{}'.format(i)
+            self.reg_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=reg_norm_name))
 
     def forward(self, fpn_feats):
         fcos_cls_feats = []
@@ -68,10 +91,9 @@ class FCOSFeat(nn.Layer):
         for feat in fpn_feats:
             cls_feat = feat
             reg_feat = feat
-            for cls_conv in self.cls_subnet_convs:
-                cls_feat = cls_conv(cls_feat)
-            for reg_conv in self.reg_subnet_convs:
-                reg_feat = reg_conv(reg_feat)
+            for i in range(self.num_convs):
+                cls_feat = self.cls_subnet_norms[i](self.cls_subnet_convs[i](cls_feat))
+                reg_feat = self.reg_subnet_norms[i](self.reg_subnet_convs[i](reg_feat))
             fcos_cls_feats.append(cls_feat)
             fcos_reg_feats.append(reg_feat)
         return fcos_cls_feats, fcos_reg_feats

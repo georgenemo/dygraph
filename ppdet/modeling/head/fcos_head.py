@@ -65,8 +65,7 @@ class FCOSFeat(nn.Layer):
                     bias_attr=ParamAttr(
                         learning_rate=2., regularizer=L2Decay(0.))))
             self.cls_subnet_convs.append(cls_conv)
-            cls_norm_name = 'fcos_head_cls_tower_norm_{}'.format(i)
-            self.cls_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=cls_norm_name))
+            self.cls_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=cls_conv_name))
 
             reg_conv_name = 'fcos_head_reg_tower_conv_{}'.format(i)
             reg_conv = self.add_sublayer(
@@ -82,8 +81,7 @@ class FCOSFeat(nn.Layer):
                     bias_attr=ParamAttr(
                         learning_rate=2., regularizer=L2Decay(0.))))
             self.reg_subnet_convs.append(reg_conv)
-            reg_norm_name = 'fcos_head_reg_tower_norm_{}'.format(i)
-            self.reg_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=reg_norm_name))
+            self.reg_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=reg_conv_name))
 
     def forward(self, fpn_feats):
         fcos_cls_feats = []

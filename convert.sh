@@ -1,0 +1,1 @@
+python3.7 convert.py fcos_r50_fpn_1x.pdparams fcos_weightsmap.txt fcos_dygraph.pdparams

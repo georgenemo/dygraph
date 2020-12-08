@@ -163,12 +163,12 @@ fpn_inner_res4_sum_lateral_w                       neck.fpn_inner_res4_sum_later
 fpn_inner_res4_sum_lateral_b                       neck.fpn_inner_res4_sum_lateral.bias              
 fpn_inner_res3_sum_lateral_w                       neck.fpn_inner_res3_sum_lateral.weight            
 fpn_inner_res3_sum_lateral_b                       neck.fpn_inner_res3_sum_lateral.bias              
-fpn_res5_sum_w                                     neck.fpn_res5_sum.weight                          
-fpn_res5_sum_b                                     neck.fpn_res5_sum.bias                            
+fpn_res5_sum_w                                     neck.fpn_res3_sum.weight                          
+fpn_res5_sum_b                                     neck.fpn_res3_sum.bias                            
 fpn_res4_sum_w                                     neck.fpn_res4_sum.weight                          
 fpn_res4_sum_b                                     neck.fpn_res4_sum.bias                            
-fpn_res3_sum_w                                     neck.fpn_res3_sum.weight                          
-fpn_res3_sum_b                                     neck.fpn_res3_sum.bias                            
+fpn_res3_sum_w                                     neck.fpn_res5_sum.weight                          
+fpn_res3_sum_b                                     neck.fpn_res5_sum.bias                            
 fpn_6_w                                            neck.fpn_6.weight                                 
 fpn_6_b                                            neck.fpn_6.bias                                   
 fpn_7_w                                            neck.fpn_7.weight                                 
@@ -211,3 +211,8 @@ fcos_head_reg_weights                              fcos_head.fcos_head_reg.weigh
 fcos_head_reg_bias                                 fcos_head.fcos_head_reg.bias                      
 fcos_head_centerness_weights                       fcos_head.fcos_head_centerness.weights
 fcos_head_centerness_bias                          fcos_head.fcos_head_centerness.bias
+fpn_res3_sum_scale_on_reg                          fcos_head.p3_feat.scale_reg                          
+fpn_res4_sum_scale_on_reg                          fcos_head.p4_feat.scale_reg 
+fpn_res5_sum_scale_on_reg                          fcos_head.p5_feat.scale_reg 
+fpn_6_scale_on_reg                                 fcos_head.p6_feat.scale_reg 
+fpn_7_scale_on_reg                                 fcos_head.p7_feat.scale_reg

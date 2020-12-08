@@ -17,6 +17,18 @@ from paddle.regularizer import L2Decay
 from ppdet.core.workspace import register
 from ppdet.modeling import ops
 
+class ScaleReg(nn.Layer):
+    def __init__(self):
+        super(ScaleReg, self).__init__()
+        self.scale_reg = self.create_parameter(
+            shape=[1],
+            attr=ParamAttr(initializer=Constant(value=1.)),
+            dtype="float32")
+
+    def forward(self, inputs):
+        out = inputs * self.scale_reg
+        return out
+
 
 def batch_norm(ch, norm_type='bn', name=None):
     bn_name = name + '.norm'
@@ -189,6 +201,15 @@ class FCOSHead(nn.Layer):
                     initializer=Constant(value=0))))
         self.fcos_head_centerness.append(fcos_head_centerness)
 
+        self.scales_regs = []
+        for i in range(len(self.fpn_stride)):
+            lvl = int(math.log(int(self.fpn_stride[i]), 2))
+            feat_name = 'p{}_feat'.format(lvl)
+            scale_reg = self.add_sublayer(
+                feat_name,
+                ScaleReg())
+            self.scales_regs.append(scale_reg)
+
     def forward(self, fpn_feats, spatial_scale, mode):
         cls_logits_list = []
         bboxes_reg_list = []
@@ -196,25 +217,18 @@ class FCOSHead(nn.Layer):
         assert len(fpn_feats) == len(self.fpn_stride), "The size of fpn_feats is not equal to size of fpn_stride"
         fcos_cls_feats, fcos_reg_feats = self.fcos_feat(fpn_feats)
 
-        for sp_scale, fpn_stride, fcos_cls_feat, fcos_reg_feat in zip(spatial_scale, self.fpn_stride, fcos_cls_feats,
+        for scale_reg, fpn_stride, fcos_cls_feat, fcos_reg_feat in zip(self.scales_regs, self.fpn_stride, fcos_cls_feats,
                                                                       fcos_reg_feats):
             cls_logits = self.fcos_head_cls[0](fcos_cls_feat)
             bbox_reg = self.fcos_head_reg[0](fcos_reg_feat)
+            bbox_reg = scale_reg(bbox_reg)
             if self.centerness_on_reg:
                 centerness = self.fcos_head_centerness[0](fcos_reg_feat)
             else:
                 centerness = self.fcos_head_centerness[0](fcos_cls_feat)
 
-            fpn_name = 'p{}'.format(int(math.log(int(fpn_stride), 2)))
-            # sp_scale
-            scale = paddle.create_parameter(
-                shape=[1, ],
-                dtype="float32",
-                name="%s_scale_on_reg" % fpn_name,
-                default_initializer=Constant(value=1.)) #
-            bbox_reg = bbox_reg * scale
             if self.norm_reg_targets:
-                bbox_reg = fluid.layers.relu(bbox_reg)
+                bbox_reg = F.relu(bbox_reg)
                 if mode == 'infer':
                     bbox_reg = bbox_reg * fpn_stride
             else:
@@ -266,22 +280,3 @@ class FCOSHead(nn.Layer):
     def get_prediction(self, locations, fcos_head_outs):
         cls_logits, bboxes_reg, centerness = fcos_head_outs
         return locations, cls_logits, bboxes_reg, centerness
-
-    '''
-    def get_prediction(self, locations, fcos_head_outs, im_info):
-        cls_logits, bboxes_reg, centerness = fcos_head_outs
-        cls_logits = paddle.flatten(cls_logits, start_axis=1, stop_axis=-1)
-        bbox_prob = F.softmax(cls_logits)
-
-        bboxes_reg = paddle.flatten(bboxes_reg, start_axis=1, stop_axis=-1)
-        bboxes_reg = paddle.reshape(bboxes_reg, (-1, self.num_classes, 4))
-
-        centerness = paddle.flatten(centerness, start_axis=1, stop_axis=-1)
-        centerness = paddle.reshape(centerness, (-1, self.num_classes, 4))
-
-        pred_boxes, pred_scores = self._post_processing(locations, cls_logits, bboxes_reg, centerness, im_info)
-
-        bbox_pred = (pred_boxes, pred_scores)
-        bboxes = (bboxes_reg, len(bboxes_reg))
-        return bbox_pred, bboxes
-    '''

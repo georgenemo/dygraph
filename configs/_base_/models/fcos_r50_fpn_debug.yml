@@ -37,7 +37,7 @@ FCOSHead:
     feat_in: 256
     feat_out: 256 
     num_convs: 4
-    norm_type: "bn" #
+    norm_type: "gn" #
   num_classes: 80
   fpn_stride: [8, 16, 32, 64, 128]
   prior_prob: 0.01

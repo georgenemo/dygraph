@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import math
 import paddle.fluid as fluid
-from ppdet.modeling.ops import multiclass_nms
 
 import paddle
 import paddle.nn.functional as F
@@ -16,6 +15,59 @@ from paddle.nn.initializer import Normal, Constant, XavierUniform
 from paddle.regularizer import L2Decay
 from ppdet.core.workspace import register
 from ppdet.modeling import ops
+
+
+class ConvNormLayer(nn.Layer):
+    def __init__(self,
+                 ch_in,
+                 ch_out,
+                 filter_size,
+                 stride,
+                 norm_type='bn',
+                 norm_name=None,
+                 name=None):
+        super(ConvNormLayer, self).__init__()
+        assert norm_type in ['bn', 'sync_bn', 'gn']
+
+        self.conv = Conv2D(
+            in_channels=ch_in,
+            out_channels=ch_out,
+            kernel_size=filter_size,
+            stride=stride,
+            padding=(filter_size - 1) // 2,
+            groups=1,
+            weight_attr=ParamAttr(name=name + "_weight"),
+            bias_attr=True)
+
+        param_attr = ParamAttr(
+            learning_rate=1.0,
+            regularizer=L2Decay(0.),
+            name=norm_name + "_scale",
+            trainable=True)
+        bias_attr = ParamAttr(
+            learning_rate=1.0,
+            regularizer=L2Decay(0.),
+            name=norm_name + "_offset",
+            trainable=True)
+
+        if norm_type in ['bn', 'sync_bn']:
+            self.norm = BatchNorm2D(
+                ch_out,
+                weight_attr=param_attr,
+                bias_attr=bias_attr)
+        elif norm_type == 'gn':
+            self.norm = GroupNorm(
+                num_groups=32,
+                num_channels=ch_out,
+                #groups=32,
+                weight_attr=param_attr,
+                bias_attr=bias_attr)
+
+    def forward(self, inputs):
+        out = self.conv(inputs)
+        out = self.norm(out)
+        return out
+
 
 class ScaleReg(nn.Layer):
     def __init__(self):
@@ -30,23 +82,6 @@ class ScaleReg(nn.Layer):
         return out
 
 
-def batch_norm(ch, norm_type='bn', name=None):
-    bn_name = name + '.norm'
-    if norm_type == 'sync_bn':
-        batch_norm = nn.SyncBatchNorm
-    elif norm_type == 'gn':
-        batch_norm = nn.GroupNorm
-    else:
-        batch_norm = nn.BatchNorm2D
-
-    return batch_norm(
-        ch,
-        weight_attr=ParamAttr(
-            name=bn_name + '.weight', regularizer=L2Decay(0.)),
-        bias_attr=ParamAttr(
-            name=bn_name + '.bias', regularizer=L2Decay(0.)))
-
-
 @register
 class FCOSFeat(nn.Layer):
     def __init__(self, feat_in=256, feat_out=256, num_convs=4, norm_type='bn'):
@@ -57,43 +92,35 @@ class FCOSFeat(nn.Layer):
         self.norm_type = norm_type
 
         self.cls_subnet_convs = []
-        self.cls_subnet_norms = []
         self.reg_subnet_convs = []
-        self.reg_subnet_norms = []
         for i in range(self.num_convs):
             in_c = self.feat_in if i == 0 else self.feat_out
 
             cls_conv_name = 'fcos_head_cls_tower_conv_{}'.format(i)
             cls_conv = self.add_sublayer(
                 cls_conv_name,
-                Conv2D(
-                    in_channels=in_c,
-                    out_channels=self.feat_out,
-                    kernel_size=3,
+                ConvNormLayer(
+                    ch_in=in_c,
+                    ch_out=self.feat_out,
+                    filter_size=3,
                     stride=1,
-                    padding=1,
-                    weight_attr=ParamAttr(
-                        initializer=XavierUniform(fan_out=in_c)),
-                    bias_attr=ParamAttr(
-                        learning_rate=2., regularizer=L2Decay(0.))))
+                    norm_type=norm_type,
+                    norm_name=cls_conv_name + '_norm',
+                    name=cls_conv_name))
             self.cls_subnet_convs.append(cls_conv)
-            self.cls_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=cls_conv_name))
 
             reg_conv_name = 'fcos_head_reg_tower_conv_{}'.format(i)
             reg_conv = self.add_sublayer(
                 reg_conv_name,
-                Conv2D(
-                    in_channels=in_c,
-                    out_channels=self.feat_out,
-                    kernel_size=3,
+                ConvNormLayer(
+                    ch_in=in_c,
+                    ch_out=self.feat_out,
+                    filter_size=3,
                     stride=1,
-                    padding=1,
-                    weight_attr=ParamAttr(
-                        initializer=XavierUniform(fan_out=in_c)),
-                    bias_attr=ParamAttr(
-                        learning_rate=2., regularizer=L2Decay(0.))))
+                    norm_type=norm_type,
+                    norm_name=reg_conv_name + '_norm',
+                    name=reg_conv_name))
             self.reg_subnet_convs.append(reg_conv)
-            self.reg_subnet_norms.append(batch_norm(self.feat_out, self.norm_type, name=reg_conv_name))
 
     def forward(self, fpn_feats):
         fcos_cls_feats = []
@@ -102,8 +129,8 @@ class FCOSFeat(nn.Layer):
             cls_feat = feat
             reg_feat = feat
             for i in range(self.num_convs):
-                cls_feat = self.cls_subnet_norms[i](self.cls_subnet_convs[i](cls_feat))
-                reg_feat = self.reg_subnet_norms[i](self.reg_subnet_convs[i](reg_feat))
+                cls_feat = F.relu(self.cls_subnet_convs[i](cls_feat))
+                reg_feat = F.relu(self.reg_subnet_convs[i](reg_feat))
             fcos_cls_feats.append(cls_feat)
             fcos_reg_feats.append(reg_feat)
         return fcos_cls_feats, fcos_reg_feats
@@ -218,7 +245,7 @@ class FCOSHead(nn.Layer):
         fcos_cls_feats, fcos_reg_feats = self.fcos_feat(fpn_feats)
 
         for scale_reg, fpn_stride, fcos_cls_feat, fcos_reg_feat in zip(self.scales_regs, self.fpn_stride, fcos_cls_feats,
-                                                                      fcos_reg_feats):
+                                                                       fcos_reg_feats):
             cls_logits = self.fcos_head_cls[0](fcos_cls_feat)
             bbox_reg = self.fcos_head_reg[0](fcos_reg_feat)
             bbox_reg = scale_reg(bbox_reg)

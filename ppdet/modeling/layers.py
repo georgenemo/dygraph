@@ -14,7 +14,7 @@
 
 import numpy as np
 from numbers import Integral
-
+from IPython import embed
 import paddle
 from paddle import to_tensor
 from ppdet.core.workspace import register, serializable
@@ -343,34 +343,25 @@ class FCOSBox(object):
 
     def _postprocessing_by_level(self, locations, box_cls, box_reg, box_ctn, scale_factor):
         """
-        [3072, 2], [1, 80, 48, 64], [1, 4, 48, 64], [1, 1, 48, 64], [1, 2]
         Args:
-            locations (Variables): anchor points for current layer
-            box_cls   (Variables): categories prediction
-            box_reg   (Variables): bounding box prediction
-            box_ctn   (Variables): centerness prediction
-            im_info   (Variables): [h, w, scale] for input images
+            locations (Variables): anchor points for current layer, [H*W, 2]
+            box_cls   (Variables): categories prediction, [N, C, H, W],  C is the number of classes 
+            box_reg   (Variables): bounding box prediction, [N, 4, H, W]
+            box_ctn   (Variables): centerness prediction, [N, 1, H, W]
+            scale_factor   (Variables): [h_scale, w_scale] for input images
         Return:
             box_cls_ch_last  (Variables): score for each category, in [N, C, M]
                 C is the number of classes and M is the number of anchor points
             box_reg_decoding (Variables): decoded bounding box, in [N, M, 4]
                 last dimension is [x1, y1, x2, y2]
         """
-        act_shape_cls = self.__merge_hw(box_cls) 
-        # [1, 80, 3072]
+        act_shape_cls = self.__merge_hw(box_cls)
         box_cls_ch_last = paddle.reshape(x=box_cls, shape=act_shape_cls)
-        #    x=box_cls,
-        #    shape=[self.num_classes, self.batch_size, -1],
-        #    actual_shape=act_shape_cls)
         box_cls_ch_last = F.sigmoid(box_cls_ch_last)
 
-        act_shape_reg = self.__merge_hw(box_reg, "channel_last")
-        # [1, 3072, 4]
-        box_reg_ch_last = paddle.transpose(box_reg, perm=[0, 2, 3, 1])
+        act_shape_reg = self.__merge_hw(box_reg)
         box_reg_ch_last = paddle.reshape(x=box_reg, shape=act_shape_reg)
-        #    x=box_reg_ch_last,
-        #    shape=[self.batch_size, -1, 4],
-        #    actual_shape=act_shape_reg)
+        box_reg_ch_last = paddle.transpose(box_reg_ch_last, perm=[0, 2, 1]) # fix
         box_reg_decoding = paddle.stack(
             [
                 locations[:, 0] - box_reg_ch_last[:, :, 0],
@@ -380,21 +371,16 @@ class FCOSBox(object):
             ],
             axis=1)
         box_reg_decoding = paddle.transpose(box_reg_decoding, perm=[0, 2, 1])
-        # [1, 3072, 4]
 
         act_shape_ctn = self.__merge_hw(box_ctn)
-        # [1, 1, 3072]
         box_ctn_ch_last = paddle.reshape(x=box_ctn, shape=act_shape_ctn)
-        #    x=box_ctn,
-        #    shape=[self.batch_size, 1, -1],
-        #    actual_shape=act_shape_ctn)
         box_ctn_ch_last = F.sigmoid(box_ctn_ch_last) 
 
         # recover the location to original image
-        im_scale = paddle.concat([scale_factor, scale_factor], axis=1) #im_info[:, 2]
+        im_scale = paddle.concat([scale_factor, scale_factor], axis=1)
         box_reg_decoding = box_reg_decoding / im_scale
         box_cls_ch_last = box_cls_ch_last * box_ctn_ch_last
-        return box_cls_ch_last, box_reg_decoding # shape=[1, 80, 5120], shape=[1, 5120, 4]
+        return box_cls_ch_last, box_reg_decoding
 
     def __call__(self, locations, cls_logits, bboxes_reg, centerness, scale_factor):
         pred_boxes_ = []
@@ -408,7 +394,7 @@ class FCOSBox(object):
             pred_scores_.append(pred_scores_lvl)
         pred_boxes = paddle.concat(pred_boxes_, axis=1)
         pred_scores = paddle.concat(pred_scores_, axis=2)
-        return pred_boxes, pred_scores # shape=[1, 6820, 4], shape=[1, 80, 6820]
+        return pred_boxes, pred_scores
 
 
 @register

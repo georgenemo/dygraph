@@ -17,21 +17,42 @@ from __future__ import division
 from __future__ import print_function
 
 from paddle import fluid
-
+from IPython import embed
 import paddle
+import paddle.nn as nn
 import paddle.nn.functional as F
+from ppdet.modeling import ops
 from ppdet.core.workspace import register
 
 INF = 1e8
 __all__ = ['FCOSLoss']
 
 
+def flatten_tensor(inputs, channel_first=False):
+    """
+    Flatten a Tensor
+    Args:
+        inputs  (Variables): Input Tensor
+        channel_first(bool): if true the dimension order of
+            Tensor is [N, C, H, W], otherwise is [N, H, W, C]
+    Return:
+        input_channel_last (Variables): The flattened Tensor in channel_last style
+    """
+    if channel_first:
+        input_channel_last = paddle.transpose(
+            inputs, perm=[0, 2, 3, 1])
+    else:
+        input_channel_last = inputs
+    output_channel_last = paddle.flatten(input_channel_last, start_axis=0, stop_axis=2)
+    return output_channel_last
+
+
 @register
-class FCOSLoss(object):
+class FCOSLoss(nn.Layer):
     """
     FCOSLoss
     Args:
-        loss_alpha (float): alpha in focal loss 
+        loss_alpha (float): alpha in focal loss
         loss_gamma (float): gamma in focal loss
         iou_loss_type(str): location loss type, IoU/GIoU/LINEAR_IoU
         reg_weights(float): weight for location loss
@@ -42,28 +63,11 @@ class FCOSLoss(object):
                  loss_gamma=2.0,
                  iou_loss_type="giou",
                  reg_weights=1.0):
+        super(FCOSLoss, self).__init__()
         self.loss_alpha = loss_alpha
         self.loss_gamma = loss_gamma
         self.iou_loss_type = iou_loss_type
         self.reg_weights = reg_weights
-
-    def __flatten_tensor(self, inputs, channel_first=False):
-        """
-        Flatten a Tensor
-        Args:
-            inputs  (Variables): Input Tensor
-            channel_first(bool): if true the dimension order of
-                Tensor is [N, C, H, W], otherwise is [N, H, W, C]
-        Return:
-            input_channel_last (Variables): The flattened Tensor in channel_last style
-        """
-        if channel_first:
-            input_channel_last = paddle.transpose(
-                inputs, perm=[0, 2, 3, 1])
-        else:
-            input_channel_last = input
-        input_channel_last = paddle.flatten(input_channel_last, axis=3)
-        return input_channel_last
 
     def __iou_loss(self, pred, targets, positive_mask, weights=None):
         """
@@ -76,14 +80,14 @@ class FCOSLoss(object):
         Return:
             loss (Varialbes): location loss
         """
-        plw = paddle.multiply(pred[:, 0], positive_mask, axis=0)
-        pth = paddle.multiply(pred[:, 1], positive_mask, axis=0)
-        prw = paddle.multiply(pred[:, 2], positive_mask, axis=0)
-        pbh = paddle.multiply(pred[:, 3], positive_mask, axis=0)
-        tlw = paddle.multiply(targets[:, 0], positive_mask, axis=0)
-        tth = paddle.multiply(targets[:, 1], positive_mask, axis=0)
-        trw = paddle.multiply(targets[:, 2], positive_mask, axis=0)
-        tbh = paddle.multiply(targets[:, 3], positive_mask, axis=0)
+        plw = paddle.multiply(pred[:, 0], positive_mask)
+        pth = paddle.multiply(pred[:, 1], positive_mask)
+        prw = paddle.multiply(pred[:, 2], positive_mask)
+        pbh = paddle.multiply(pred[:, 3], positive_mask)
+        tlw = paddle.multiply(targets[:, 0], positive_mask)
+        tth = paddle.multiply(targets[:, 1], positive_mask)
+        trw = paddle.multiply(targets[:, 2], positive_mask)
+        tbh = paddle.multiply(targets[:, 3], positive_mask)
         tlw.stop_gradient = True
         trw.stop_gradient = True
         tth.stop_gradient = True
@@ -101,7 +105,7 @@ class FCOSLoss(object):
         area_inter = (ilw + irw) * (ith + ibh)
         ious = (area_inter + 1.0) / (
             area_predict + area_target - area_inter + 1.0)
-        ious = paddle.multiply(ious, positive_mask, axis=0)
+        ious = paddle.multiply(ious, positive_mask)
         if self.iou_loss_type.lower() == "linear_iou":
             loss = 1.0 - ious
         elif self.iou_loss_type.lower() == "giou":
@@ -117,8 +121,7 @@ class FCOSLoss(object):
             loss = loss * weights
         return loss
 
-    def __call__(self, cls_logits, bboxes_reg, centerness, tag_labels,
-                 tag_bboxes, tag_center):
+    def forward(self, cls_logits, bboxes_reg, centerness, tag_labels, tag_bboxes, tag_center):
         """
         Calculate the loss for classification, location and centerness
         Args:
@@ -146,18 +149,18 @@ class FCOSLoss(object):
         num_lvl = len(cls_logits)
         for lvl in range(num_lvl):
             cls_logits_flatten_list.append(
-                self.__flatten_tensor(cls_logits[lvl], True))  # num_lvl - 1 - lvl
+                flatten_tensor(cls_logits[lvl], True))
             bboxes_reg_flatten_list.append(
-                self.__flatten_tensor(bboxes_reg[lvl], True))
+                flatten_tensor(bboxes_reg[lvl], True))
             centerness_flatten_list.append(
-                self.__flatten_tensor(centerness[lvl], True))
+                flatten_tensor(centerness[lvl], True))
 
             tag_labels_flatten_list.append(
-                self.__flatten_tensor(tag_labels[lvl], False))
+                flatten_tensor(tag_labels[lvl], False))
             tag_bboxes_flatten_list.append(
-                self.__flatten_tensor(tag_bboxes[lvl], False))
+                flatten_tensor(tag_bboxes[lvl], False))
             tag_center_flatten_list.append(
-                self.__flatten_tensor(tag_center[lvl], False))
+                flatten_tensor(tag_center[lvl], False))
 
         cls_logits_flatten = paddle.concat(
             cls_logits_flatten_list, axis=0)
@@ -165,7 +168,7 @@ class FCOSLoss(object):
             bboxes_reg_flatten_list, axis=0)
         centerness_flatten = paddle.concat(
             centerness_flatten_list, axis=0)
-        
+
         tag_labels_flatten = paddle.concat(
             tag_labels_flatten_list, axis=0)
         tag_bboxes_flatten = paddle.concat(
@@ -180,35 +183,45 @@ class FCOSLoss(object):
         mask_positive.stop_gradient = True
         mask_positive_float = paddle.cast(mask_positive, dtype="float32")
         mask_positive_float.stop_gradient = True
-        num_positive_fp32 = fluid.layers.reduce_sum(mask_positive_float)
+        num_positive_fp32 = paddle.sum(mask_positive_float)
         num_positive_int32 = paddle.cast(num_positive_fp32, dtype="int32")
         num_positive_int32 = num_positive_int32 * 0 + 1
         num_positive_fp32.stop_gradient = True
         num_positive_int32.stop_gradient = True
         normalize_sum = paddle.sum(tag_center_flatten)
         normalize_sum.stop_gradient = True
-        normalize_sum = fluid.layers.reduce_sum(mask_positive_float *
-                                                normalize_sum)
+        normalize_sum = paddle.sum(mask_positive_float * normalize_sum)
         normalize_sum.stop_gradient = True
 
-        cls_loss = F.sigmoid_focal_loss(
-            cls_logits_flatten, tag_labels_flatten,
-            num_positive_int32) / num_positive_fp32
+        # expand_onehot_labels
+        '''
+        label_channels = cls_logits_flatten.shape[-1]
+        tag_labels_bin = np.zeros(shape=(tag_labels_flatten.shape[0], label_channels)) # tag_labels_flatten.new_full((tag_labels_flatten.shape[0], label_channels), 0)
+        #inds = np.nonzero((tag_labels_flatten >= 0) & (tag_labels_flatten < label_channels), as_tuple=False).squeeze()
+        inds = np.nonzero((tag_labels_flatten > 0)).squeeze()[:, 0]
+        if inds.numel() > 0:
+            tag_labels_bin[inds, tag_labels_flatten[inds]] = 1
+        # embed()
 
-        reg_loss = self.__iou_loss(bboxes_reg_flatten, tag_bboxes_flatten,
-                                   mask_positive_float, tag_center_flatten)
-        reg_loss = paddle.multiply(
-            reg_loss, mask_positive_float, axis=0) / normalize_sum
+        tag_labels_flatten_bin = paddle.to_tensor(tag_labels_bin.astype('float32'),
+        cls_loss = F.sigmoid_focal_loss(cls_logits_flatten, tag_labels_flatten_bin)
+                    #, normalizer=paddle.sum(num_positive_int32))# reduction='mean')
+        '''
+        cls_loss = fluid.layers.sigmoid_focal_loss(cls_logits_flatten, tag_labels_flatten, num_positive_int32) / num_positive_fp32
+        #cls_loss = F.sigmoid_focal_loss(cls_logits_flatten, tag_labels_flatten, num_positive_int32) / num_positive_fp32
 
-        ctn_loss = F.sigmoid_cross_entropy_with_logits(
-            x=centerness_flatten,
-            label=tag_center_flatten) * mask_positive_float / num_positive_fp32
-        ctn_loss = paddle.elementwise_mul(
-            ctn_loss, mask_positive_float, axis=0) / normalize_sum
-        
+        reg_loss = self.__iou_loss(bboxes_reg_flatten, tag_bboxes_flatten, mask_positive_float, tag_center_flatten)
+        reg_loss = paddle.multiply(reg_loss, mask_positive_float) / normalize_sum
+
+        #ctn_loss = fluid.layers.sigmoid_cross_entropy_with_logits(
+        #    x=centerness_flatten,
+        #    label=tag_center_flatten) * mask_positive_float / num_positive_fp32
+        ctn_loss = ops.sigmoid_cross_entropy_with_logits(centerness_flatten, tag_center_flatten, ignore_index=-1, normalize=True)
+        ctn_loss = paddle.multiply(ctn_loss, mask_positive_float) / normalize_sum
+
         loss_all = {
-            "loss_centerness": fluid.layers.reduce_sum(ctn_loss),
-            "loss_cls": fluid.layers.reduce_sum(cls_loss),
-            "loss_box": fluid.layers.reduce_sum(reg_loss)
+            "loss_centerness": paddle.sum(ctn_loss),
+            "loss_cls": paddle.sum(cls_loss),
+            "loss_box": paddle.sum(reg_loss)
         }
         return loss_all

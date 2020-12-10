@@ -1,7 +1,7 @@
 worker_num: 2
 TrainReader:
   inputs_def:
-    fields: ['image', 'im_info',  'im_id', 'gt_bbox', 'gt_class', 'im_shape', 'scale_factor'] # 'fcos_target'
+    fields: ['image', 'im_info',  'im_id', 'gt_bbox', 'gt_class', 'gt_score']
   sample_transforms:
   - DecodeImage: {to_rgb: true}
   - RandomFlipImage: {prob: 0.5}
@@ -12,8 +12,8 @@ TrainReader:
   - PadBatch: {pad_to_stride: 128, use_padded_im_info: false}
   - Gt2FCOSTarget: {object_sizes_boundary: [64, 128, 256, 512], center_sampling_radius: 1.5, downsample_ratios: [8, 16, 32, 64, 128], norm_reg_targets: True}
   batch_size: 2
-  shuffle: true # drop_last: true # maskrcnn
-  use_process: false # oldfcos +
+  shuffle: true
+  drop_last: false
 
 
 EvalReader:

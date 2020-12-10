@@ -36,20 +36,23 @@ class ConvNormLayer(nn.Layer):
             stride=stride,
             padding=(filter_size - 1) // 2,
             groups=1,
-            weight_attr=ParamAttr(name=name + "_weight"),
-            bias_attr=True)
+            weight_attr=ParamAttr(
+                name=name + "_weight",
+                initializer=Normal(mean=0., std=0.01),
+                learning_rate=1.),
+            bias_attr = ParamAttr(
+                name=name + "_bias",
+                initializer=Constant(value=0),
+                learning_rate=2.))
 
         param_attr = ParamAttr(
-            learning_rate=1.0,
-            regularizer=L2Decay(0.),
             name=norm_name + "_scale",
-            trainable=True)
+            learning_rate=1.,
+            regularizer=L2Decay(0.))
         bias_attr = ParamAttr(
-            learning_rate=1.0,
-            regularizer=L2Decay(0.),
             name=norm_name + "_offset",
-            trainable=True)
-
+            learning_rate=1.,
+            regularizer=L2Decay(0.))
         if norm_type in ['bn', 'sync_bn']:
             self.norm = BatchNorm2D(
                 ch_out,
@@ -59,7 +62,6 @@ class ConvNormLayer(nn.Layer):
             self.norm = GroupNorm(
                 num_groups=32,
                 num_channels=ch_out,
-                #groups=32,
                 weight_attr=param_attr,
                 bias_attr=bias_attr)
 
@@ -170,7 +172,6 @@ class FCOSHead(nn.Layer):
         self.norm_reg_targets = norm_reg_targets
         self.centerness_on_reg = centerness_on_reg
         self.use_dcn_in_tower = use_dcn_in_tower
-        self.batch_size = 8  #
 
         self.fcos_head_cls = []
         self.fcos_head_reg = []

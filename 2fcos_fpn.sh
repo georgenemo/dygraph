@@ -15,4 +15,4 @@ CUDA_VISIBLE_DEVICES=7 python3.7 tools/train.py -c ${config} -o use_gpu=true --e
 #CUDA_VISIBLE_DEVICES=0 python3.7 tools/eval.py -c ${config} -o use_gpu=true weights=fcos_dygraph.pdparams --output_eval ${log_dir}
 
 # 3. infer
-#CUDA_VISIBLE_DEVICES=0 python3.7 tools/infer.py -c ${config} -o use_gpu=true weights=fcos_dygraph.pdparams --infer_img=demo/demo.png
+#CUDA_VISIBLE_DEVICES=0 python3.7 tools/infer.py -c ${config} -o use_gpu=true weights=fcos_dygraph.pdparams --infer_img=demo/000000014439.jpg
